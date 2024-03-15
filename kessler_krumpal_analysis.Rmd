@@ -1,0 +1,768 @@
+---
+title: "Ethical Preferences for the Fair Allocation of Resources in the Moral Dilemma of Triage"
+author: "Peer Keßler and Ivar Krumpal"
+output: html_notebook
+---
+
+# Packages
+
+```{r}
+
+## Uncomment for installing packages. ##
+
+# install.packages("janitor")
+# install.packages("lme4")
+# install.packages("lmerTest")
+# install.packages("lubridate")
+# install.packages("magrittr")
+# install.packages("tidyverse")
+
+
+library(janitor)
+library(lme4)
+library(lmerTest)
+library(lubridate)
+library(countrycode)
+library(magrittr)
+library(tidyverse)
+
+sessionInfo()
+```
+
+# Versions:
+
+R version 4.3.1 (2023-06-16)
+Platform: aarch64-apple-darwin20 (64-bit)
+Running under: macOS Sonoma 14.2.1
+
+Matrix products: default
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+LAPACK: /Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+time zone: Europe/Berlin
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] forcats_1.0.0     stringr_1.5.0     dplyr_1.1.3       purrr_1.0.2       readr_2.1.4      
+ [6] tidyr_1.3.0       tibble_3.2.1      ggplot2_3.4.3     tidyverse_2.0.0   magrittr_2.0.3   
+[11] countrycode_1.5.0 lubridate_1.9.3   lmerTest_3.1-3    lme4_1.1-34       Matrix_1.6-1.1   
+[16] janitor_2.2.0    
+
+loaded via a namespace (and not attached):
+ [1] utf8_1.2.3          generics_0.1.3      stringi_1.7.12      lattice_0.21-8     
+ [5] hms_1.1.3           grid_4.3.1          timechange_0.2.0    fansi_1.0.5        
+ [9] scales_1.2.1        numDeriv_2016.8-1.1 cli_3.6.1           rlang_1.1.1        
+[13] munsell_0.5.0       splines_4.3.1       withr_2.5.1         tools_4.3.1        
+[17] tzdb_0.4.0          nloptr_2.0.3        minqa_1.2.6         colorspace_2.1-0   
+[21] boot_1.3-28.1       vctrs_0.6.4         R6_2.5.1            lifecycle_1.0.3    
+[25] snakecase_0.11.1    MASS_7.3-60         pkgconfig_2.0.3     pillar_1.9.0       
+[29] gtable_0.3.4        glue_1.6.2          Rcpp_1.0.11         xfun_0.40          
+[33] tidyselect_1.2.0    rstudioapi_0.15.0   knitr_1.44          nlme_3.1-162       
+[37] compiler_4.3.1   
+
+# Read data
+
+```{r}
+ # dput(x = df_triage_final,
+ #      file = "data/data_final.R")
+ # 
+ # triage_data <- dget(file = "data/data_final.R")
+ # 
+ # triage_data %>%
+ #   select("id", contains("vig"), contains("proc"), "consent", "bot_all", "time", "age", "gender", "educ", "cntry_live") %>%
+ #   dput(x = .,
+ #        file = "data/data.R")
+
+triage_data <- dget(file = "data/data.R")
+```
+
+# Clean data
+
+```{r}
+triage_data_clean <-
+  triage_data %>% 
+  filter(bot_all, time >= 5)
+```
+
+# Plots
+
+## Plot a
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  lmer(formula = vig_choice ~ vig_weight + vig_age + vig_chance_of_survival_with_ventilation + vig_ventilation_status + vig_children + vig_disability + vig_volunteer_work + vig_vaccination_status + (1|id),
+       data = .) %>% 
+  confint(object = .,
+          method = "Wald") %>% 
+  as.data.frame() %>% 
+  as_tibble(.,
+            rownames = "attr") %>% 
+  filter(str_detect(string = attr,
+                    pattern = "vig_")) %>% 
+  clean_names() %>% 
+  add_case(attr = c("20% chance of survival (Ref.)",
+                    "25 years old (Ref.)"
+                    )) %>% 
+  mutate(effect = x2_5_percent + (x97_5_percent - x2_5_percent) / 2,
+         attr = str_extract(attr, "[A-Z0-9].*"),
+         attr = factor(attr,
+                       levels = c("20% chance of survival (Ref.)",
+                                  "50% chance of survival",
+                                  "80% chance of survival",
+                                  "25 years old (Ref.)",
+                                  "50 years old",
+                                  "75 years old",
+                                  "Is already ventilated",
+                                  "Is vaccinated",
+                                  "Has children",
+                                  "Has a disability",
+                                  "Does volunteer work",
+                                  "Overweight"
+                                  )
+                       ),
+         attr = fct_rev(attr),
+         effect = if_else(is.na(effect),
+                          true = 0,
+                          false = effect)
+         ) %>% 
+  ggplot(mapping = aes(y = effect,
+                       x = attr,
+                       ymin = x2_5_percent,
+                       ymax = x97_5_percent)) +
+  geom_hline(yintercept = 0,
+             alpha = 0.6) +
+  geom_errorbar(width = 0.35,
+                color = "#27363A") + 
+  geom_point(size = 2.5,
+             color = "#EB8019") +
+  coord_flip() +
+  labs(x = "",
+       y = "AMCE",
+       title = "a)") + 
+  theme_minimal() +
+  theme(text = element_text(family = "serif"),
+        plot.title.position = "plot")
+```
+
+Corresponding regression table:
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  lmer(formula = vig_choice ~ vig_weight + vig_age + vig_chance_of_survival_with_ventilation + vig_ventilation_status + vig_children + vig_disability + vig_volunteer_work + vig_vaccination_status + (1|id),
+       data = .) %>% 
+  summary()
+```
+
+## Plot b
+
+```{r}
+triage_data_clean %>%
+  select(id, contains("proc_")) %>%
+  distinct() %>% 
+  summarise(across(contains("proc_"), 
+                   list(mean = ~mean(., na.rm = TRUE),
+                        sd = ~sd(., na.rm = TRUE)
+                        ), 
+                   .names = "{.col}_{.fn}"
+                   ),
+            n = n()) %>%
+  pivot_longer(cols = -n, 
+               names_to = c(".value", "Procedure"), 
+               names_sep = "_", 
+               values_drop_na = TRUE) %>%
+  mutate(Procedure = factor(str_replace(Procedure, "proc_", ""), 
+                            levels = c("maxprog", "fcfs", "random", "benpast", "benfut", "sick", "young", "lifeq"), 
+                            labels = c("Maximize prognosis", "First-come, first-served", "Random selection", 
+                                       "Benefit in the past", "Benefit in the future", "Sickest first", 
+                                       "Youngest first", "Life quality after recovery")),
+         Procedure = fct_rev(Procedure)) %>%
+  group_by(Procedure) %>%
+  mutate(e = qt(0.975, df = first(n) - 1) * nth(proc, n = 2) / sqrt(first(n)), 
+         upper = first(proc) + e, 
+         lower = first(proc) - e,
+         proc = first(proc)) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  ggplot(mapping = aes(x = Procedure,
+                       y = proc,
+                       ymin = lower,
+                       ymax = upper
+                       )
+         ) +
+  geom_bar(stat = "identity",
+             fill = "#EB8019") +
+  geom_errorbar(width = 0.35,
+                color = "#27363A") + 
+  coord_flip() +
+  labs(x = "",
+       y = "Mean rating of procedures",
+       title = "b)") +
+  scale_y_continuous(breaks = 1:6,
+                     limits = c(0,6)) +
+  theme_minimal() +
+  theme(text = element_text(family = "serif",),
+        plot.title.position = "plot")
+```
+
+Additional stats:
+
+```{r}
+triage_data_clean %>%
+  select(id, contains("proc_")) %>%
+  distinct() %>% 
+  summarise(across(contains("proc_"), 
+                   list(mean = ~mean(., na.rm = TRUE),
+                        sd = ~sd(., na.rm = TRUE)
+                        ), 
+                   .names = "{.col}_{.fn}"
+                   ),
+            n = n()) %>%
+  pivot_longer(cols = -n, 
+               names_to = c(".value", "Procedure"), 
+               names_sep = "_", 
+               values_drop_na = TRUE) %>%
+  mutate(Procedure = factor(str_replace(Procedure, "proc_", ""), 
+                            levels = c("maxprog", "fcfs", "random", "benpast", "benfut", "sick", "young", "lifeq"), 
+                            labels = c("Maximize prognosis", "First-come, first-served", "Random selection", 
+                                       "Benefit in the past", "Benefit in the future", "Sickest first", 
+                                       "Youngest first", "Life quality after recovery")),
+         Procedure = fct_rev(Procedure),
+         value = rep(c("M","SD"), times = length(unique(.$Procedure))
+                     )
+         )
+```
+
+## Plot c
+
+```{r}
+triage_data_clean %>% 
+  filter(vig_set <= 5) %>% 
+  mutate(across(contains("proc_"), 
+                .fns = ~ if_else(.x <= 4,
+                                 "Low",
+                                 "High"),
+                .names = "{.col}_bi"
+                ),
+         across(.cols = contains("_bi"),
+                .fns = ~ factor(.,
+                                levels = c("Low", "High")
+                                )
+                )
+         ) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq_bi + vig_age * proc_young_bi + vig_chance_of_survival_with_ventilation * proc_maxprog_bi + vig_chance_of_survival_with_ventilation * proc_sick_bi + vig_ventilation_status * proc_fcfs_bi + vig_children * proc_benfut_bi + vig_disability * proc_lifeq_bi + vig_volunteer_work  * proc_benpast_bi + vig_vaccination_status * proc_benpast_bi + (1|id),
+       data = .) %>% 
+  confint(object = .,
+          method = "Wald") %>% 
+   as.data.frame() %>% 
+   as_tibble(.,
+             rownames = "attr") %>% 
+   filter(str_detect(string = attr,
+                     pattern = ":")) %>% 
+   clean_names() %>% 
+   mutate(attr = factor(attr, 
+                        levels = c("vig_chance_of_survival_with_ventilation50% chance of survival:proc_maxprog_biHigh",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_maxprog_biHigh",
+                                   "vig_chance_of_survival_with_ventilation50% chance of survival:proc_sick_biHigh",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_sick_biHigh",
+                                   "vig_age50 years old:proc_young_biHigh",
+                                   "vig_age75 years old:proc_young_biHigh",
+                                   "vig_ventilation_statusIs already ventilated:proc_fcfs_biHigh",
+                                   "proc_benpast_biHigh:vig_vaccination_statusIs vaccinated",
+                                   "vig_volunteer_workDoes volunteer work:proc_benpast_biHigh",
+                                   "vig_childrenHas children:proc_benfut_biHigh",
+                                   "proc_lifeq_biHigh:vig_disabilityHas a disability",
+                                   "vig_weightOverweight:proc_lifeq_biHigh"
+                                   ),
+                        labels = c("50% chance of survival x Maximize prognosis",
+                                   "80% chance of survival x Maximize prognosis",
+                                   "50% chance of survival x Sickest first",
+                                   "80% chance of survival x Sickest first",
+                                   "50 years old x Youngest first",
+                                   "75 years old x Youngest first",
+                                   "Is already ventilated x First Come, first served",
+                                   "Is vaccinated x Benefit in the past",
+                                   "Does volunteer work x Benefit in the past",
+                                   "Has children x Benefit in the future",
+                                   "Has a disability x Life quality after recovery",
+                                   "Is overweight x Life quality after recovery")
+                        ),
+          eff = x97_5_percent - ((x97_5_percent - x2_5_percent) / 2),
+          attr = fct_rev(attr)
+          ) %>% 
+  ggplot(mapping = aes(x = attr,
+                       y = eff,
+                       ymin = x2_5_percent,
+                       ymax = x97_5_percent
+                       )
+         ) +
+    geom_bar(stat = "identity",
+             fill = "#EB8019") + 
+    geom_errorbar(width = 0.35,) +
+    geom_hline(yintercept = 0,
+               linetype = "dashed") +
+    labs(y = "Interaction effects",
+         x = "",
+         title = "c)") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(family = "serif"),
+          plot.title.position = "plot"
+          )
+```
+
+Corresponding regression table:
+
+```{r}
+triage_data_clean %>% 
+  filter(vig_set <= 5) %>% 
+  mutate(across(contains("proc_"), 
+                .fns = ~ if_else(.x <= 4,
+                                 "Low",
+                                 "High"),
+                .names = "{.col}_bi"
+                ),
+         across(.cols = contains("_bi"),
+                .fns = ~ factor(.,
+                                levels = c("Low", "High")
+                                )
+                )
+         ) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq_bi + vig_age * proc_young_bi + vig_chance_of_survival_with_ventilation * proc_maxprog_bi + vig_chance_of_survival_with_ventilation * proc_sick_bi + vig_ventilation_status * proc_fcfs_bi + vig_children * proc_benfut_bi + vig_disability * proc_lifeq_bi + vig_volunteer_work  * proc_benpast_bi + vig_vaccination_status * proc_benpast_bi + (1|id),
+       data = .) %>% 
+  summary() 
+```
+
+## Plot d
+
+```{r}
+triage_data_random <-
+  triage_data_clean %>%
+  filter(vig_set > 5) %>% 
+  group_by(id, vig_set) %>% 
+  summarize(random = max(vig_choice)) %>% 
+  ungroup() %>% 
+  mutate(random = if_else(condition = random == 3,
+                          true = 1,
+                          false = 0
+                          )
+         ) %>% 
+  group_by(id) %>% 
+  summarise(rand_prob = mean(random, na.rm = T))
+
+plot_data <- 
+  triage_data_clean %>% 
+  select("id","proc_random") %>% 
+  distinct() %>% 
+  right_join(triage_data_random,
+             by = "id") 
+
+predict_data <- 
+  tibble(proc_random = 0:7)
+
+predict_data$rand_prob <- 
+  plot_data %>% 
+  lm(rand_prob ~ proc_random,
+     data = .) %>% 
+  predict(.,
+          newdata = predict_data)
+
+{set.seed(567)
+plot_data %>% 
+  ggplot(mapping = aes(x = proc_random,
+                       y = rand_prob)) +
+  geom_jitter(width = 1,
+              height = 0.1,
+              alpha = 0.5,
+              color = "#EB8019") +
+  geom_line(data = predict_data,
+            mapping = aes(x = proc_random,
+                          y = rand_prob),
+            color = "#27363A",
+            linetype = "dashed",
+            linewidth = 0.8) +
+  scale_y_continuous(labels = scales::percent,
+                     breaks = seq(0,1,0.2)) +
+  scale_x_continuous(breaks = 1:6) +
+  labs(y = expression(atop("Relative frequency of choosing ", paste(italic("Random selection")))),
+       x =  expression(atop("Rated fairness of procedure ", paste(italic("Random selection")))),
+       title = "d)") +
+  theme_minimal() +
+  theme(text = element_text(family = "serif"),
+        plot.title.position = "plot")
+}
+```
+
+Corresponding regression table:
+
+```{r}
+triage_data_random <-
+  triage_data_clean %>%
+  filter(vig_set > 5) %>% 
+  group_by(id, vig_set) %>% 
+  summarize(random = max(vig_choice)) %>% 
+  ungroup() %>% 
+  mutate(random = if_else(condition = random == 3,
+                          true = 1,
+                          false = 0
+                          )
+         ) %>% 
+  group_by(id) %>% 
+  summarise(rand_prob = mean(random, na.rm = T))
+
+plot_data <- 
+  triage_data_clean %>% 
+  select("id","proc_random") %>% 
+  distinct() %>% 
+  right_join(triage_data_random,
+             by = "id") 
+
+lm(rand_prob ~ proc_random,
+     data = plot_data) %>% 
+  summary()
+```
+
+Additional statistics:
+
+```{r}
+triage_data_clean %>% 
+  filter(vig_set > 5) %>% 
+  group_by(id) %>% 
+  mutate(random = if_else(any(vig_choice == 3),
+                          true = 1,
+                          false = 0)
+         ) %>% 
+  ungroup() %>% 
+ select("id","random") %>% 
+  distinct() %>% 
+  count(random) %>% 
+  mutate(sum = sum(n),
+         prop = n/sum)
+
+# 61% of all participants chose "random selection at least once.
+
+
+triage_data_clean %>% 
+  filter(vig_set > 5) %>% 
+  transmute(random = if_else(vig_choice == 3,
+                          true = 1,
+                          false = 0)
+         ) %>% 
+  count(random) %>% 
+  mutate(sum = sum(n),
+         prop = n/sum)
+
+#> In 75.6% of all choice sets that include the "random-selection" option the 
+#> participants chose to make a deliberate decision instead of using a random 
+#> allocation mechanism.
+
+triage_data_random <-
+  triage_data_clean %>%
+  filter(vig_set > 5) %>% 
+  group_by(id, vig_set) %>% 
+  summarize(random = max(vig_choice)) %>% 
+  ungroup() %>% 
+  mutate(random = if_else(condition = random == 3,
+                          true = 1,
+                          false = 0
+                          )
+         ) %>% 
+  group_by(id) %>% 
+  summarise(rand_prob = mean(random, na.rm = T))
+
+plot_data <- 
+  triage_data_clean %>% 
+  select("id","proc_random") %>% 
+  distinct() %>% 
+  right_join(triage_data_random,
+             by = "id")
+plot_data %$%
+  cor.test(proc_random,
+           rand_prob,
+           method = "kendall")
+```
+
+# Robustness Checks for Plot c
+
+## Median Split
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  mutate(proc_maxprog_bi = if_else(proc_maxprog <= median(.$proc_maxprog, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_fcfs_bi = if_else(proc_fcfs <= median(.$proc_fcfs, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_random_bi = if_else(proc_random <= median(.$proc_random, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_benpast_bi = if_else(proc_benpast <= median(.$proc_benpast, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_benfut_bi = if_else(proc_benfut <= median(.$proc_benfut, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_sick_bi = if_else(proc_sick <= median(.$proc_sick, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_young_bi = if_else(proc_young <= median(.$proc_young, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_lifeq_bi = if_else(proc_lifeq <= median(.$proc_lifeq, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         across(.cols = contains("_bi"),
+                .fns = ~ factor(.,
+                                levels = c("Low", "High")
+                                )
+                )
+         ) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq_bi + vig_age * proc_young_bi + vig_chance_of_survival_with_ventilation * proc_maxprog_bi + vig_chance_of_survival_with_ventilation * proc_sick_bi + vig_ventilation_status * proc_fcfs_bi + vig_children * proc_benfut_bi + vig_disability * proc_lifeq_bi + vig_volunteer_work * proc_benpast_bi + vig_vaccination_status * proc_benpast_bi + (1|id),
+       data = .) %>% 
+  confint(object = .,
+          method = "Wald") %>% 
+   as.data.frame() %>% 
+   as_tibble(.,
+             rownames = "attr") %>% 
+   filter(str_detect(string = attr,
+                     pattern = ":")) %>% 
+   clean_names() %>% 
+   mutate(attr = factor(attr, 
+                        levels = c("vig_chance_of_survival_with_ventilation50% chance of survival:proc_maxprog_biHigh",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_maxprog_biHigh",
+                                    "vig_chance_of_survival_with_ventilation50% chance of survival:proc_sick_biHigh",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_sick_biHigh",
+                                   "vig_age50 years old:proc_young_biHigh",
+                                   "vig_age75 years old:proc_young_biHigh",
+                                   "vig_ventilation_statusIs already ventilated:proc_fcfs_biHigh",
+                                   "proc_benpast_biHigh:vig_vaccination_statusIs vaccinated",
+                                   "vig_volunteer_workDoes volunteer work:proc_benpast_biHigh",
+                                   "vig_childrenHas children:proc_benfut_biHigh",
+                                   "proc_lifeq_biHigh:vig_disabilityHas a disability",
+                                   "vig_weightOverweight:proc_lifeq_biHigh"
+                                   ),
+                        labels = c("50% chance of survival x Maximize prognosis",
+                                   "80% chance of survival x Maximize prognosis",
+                                   "50% chance of survival x Sickest first",
+                                   "80% chance of survival x Sickest first",
+                                   "50 years old x Youngest first",
+                                   "75 years old x Youngest first",
+                                   "Is already ventilated x First Come, first served",
+                                   "Is vaccinated x Benefit in the past",
+                                   "Does volunteer work x Benefit in the past",
+                                   "Has children x Benefit in the future",
+                                   "Has a disability x Life quality",
+                                   "Is overweight x Life quality")
+                        ),
+          eff = x97_5_percent - ((x97_5_percent - x2_5_percent) / 2),
+          attr = fct_rev(attr)
+          ) %>% 
+  ggplot(mapping = aes(x = attr,
+                       y = eff,
+                       ymin = x2_5_percent,
+                       ymax = x97_5_percent
+                       )
+         ) +
+    geom_bar(stat = "identity",
+             fill = "#EB8019") + 
+    geom_errorbar(width = 0.35,) +
+    geom_hline(yintercept = 0,
+               linetype = "dashed") +
+    labs(y = "Interaction effects",
+         x = "",
+         title = "Plot c with Median Split"
+         ) +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(family = "serif"),
+          plot.title.position = "plot"
+          )
+```
+
+Corresponding regression table:
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  mutate(proc_maxprog_bi = if_else(proc_maxprog <= median(.$proc_maxprog, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_fcfs_bi = if_else(proc_fcfs <= median(.$proc_fcfs, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_random_bi = if_else(proc_random <= median(.$proc_random, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_benpast_bi = if_else(proc_benpast <= median(.$proc_benpast, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_benfut_bi = if_else(proc_benfut <= median(.$proc_benfut, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_sick_bi = if_else(proc_sick <= median(.$proc_sick, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_young_bi = if_else(proc_young <= median(.$proc_young, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         proc_lifeq_bi = if_else(proc_lifeq <= median(.$proc_lifeq, na.rm = T),
+                                  true = "Low",
+                                  false = "High"
+                                  ),
+         across(.cols = contains("_bi"),
+                .fns = ~ factor(.,
+                                levels = c("Low", "High")
+                                )
+                )
+         ) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq_bi + vig_age * proc_young_bi + vig_chance_of_survival_with_ventilation * proc_maxprog_bi + vig_chance_of_survival_with_ventilation * proc_sick_bi + vig_ventilation_status * proc_fcfs_bi + vig_children * proc_benfut_bi + vig_disability * proc_lifeq_bi + vig_volunteer_work * proc_benpast_bi + vig_vaccination_status * proc_benpast_bi + (1|id),
+       data = .) %>% 
+  summary()
+```
+
+
+## Numeric Value
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq + vig_age * proc_young + vig_chance_of_survival_with_ventilation * proc_maxprog + vig_chance_of_survival_with_ventilation * proc_sick + vig_ventilation_status * proc_fcfs + vig_children * proc_benfut + vig_disability * proc_lifeq + vig_volunteer_work * proc_benpast + vig_vaccination_status * proc_benpast + (1|id),
+       data = .) %>% 
+  confint(object = .,
+          method = "Wald") %>% 
+   as.data.frame() %>% 
+   as_tibble(.,
+             rownames = "attr") %>% 
+   filter(str_detect(string = attr,
+                     pattern = ":")) %>% 
+   clean_names() %>% 
+   mutate(attr = factor(attr, 
+                        levels = c("vig_chance_of_survival_with_ventilation50% chance of survival:proc_maxprog",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_maxprog",
+                                    "vig_chance_of_survival_with_ventilation50% chance of survival:proc_sick",
+                                   "vig_chance_of_survival_with_ventilation80% chance of survival:proc_sick",
+                                   "vig_age50 years old:proc_young",
+                                   "vig_age75 years old:proc_young",
+                                   "vig_ventilation_statusIs already ventilated:proc_fcfs",
+                                   "proc_benpast:vig_vaccination_statusIs vaccinated",
+                                   "vig_volunteer_workDoes volunteer work:proc_benpast",
+                                   "vig_childrenHas children:proc_benfut",
+                                   "proc_lifeq:vig_disabilityHas a disability",
+                                   "vig_weightOverweight:proc_lifeq"
+                                   ),
+                        labels = c("50% chance of survival x Maximize prognosis",
+                                   "80% chance of survival x Maximize prognosis",
+                                   "50% chance of survival x Sickest first",
+                                   "80% chance of survival x Sickest first",
+                                   "50 years old x Youngest first",
+                                   "75 years old x Youngest first",
+                                   "Is already ventilated x First Come, first served",
+                                   "Is vaccinated x Benefit in the past",
+                                   "Does volunteer work x Benefit in the past",
+                                   "Has children x Benefit in the future",
+                                   "Has a disability x Life quality",
+                                   "Is overweight x Life quality")
+                        ),
+          eff = x97_5_percent - ((x97_5_percent - x2_5_percent) / 2),
+          attr = fct_rev(attr)
+          ) %>% 
+  ggplot(mapping = aes(x = attr,
+                       y = eff,
+                       ymin = x2_5_percent,
+                       ymax = x97_5_percent
+                       )
+         ) +
+    geom_bar(stat = "identity",
+             fill = "#EB8019") + 
+    geom_errorbar(width = 0.35,) +
+    geom_hline(yintercept = 0,
+               linetype = "dashed") +
+    labs(y = "Interaction effects",
+         x = "",
+         title = "Plot c with numeric values") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(family = "serif"),
+          plot.title.position = "plot"
+          )
+
+
+```
+
+Corresponding regression table:
+
+```{r}
+triage_data_clean %>% 
+   filter(vig_set <= 5) %>% 
+  lmer(formula = vig_choice ~ vig_weight * proc_lifeq + vig_age * proc_young + vig_chance_of_survival_with_ventilation * proc_maxprog + vig_chance_of_survival_with_ventilation * proc_sick + vig_ventilation_status * proc_fcfs + vig_children * proc_benfut + vig_disability * proc_lifeq + vig_volunteer_work * proc_benpast + vig_vaccination_status * proc_benpast + (1|id),
+       data = .) %>% 
+  summary()
+```
+
+# Sample
+
+```{r}
+triage_data_clean %>% 
+  select("id","age") %>% 
+  distinct() %>% 
+  summarise(age_mean = mean(age, na.rm = T),
+            age_sd = sd(age, na.rm = T)
+            )
+
+triage_data_clean %>% 
+  select("id","educ") %>% 
+  distinct() %>% 
+  summarise(educ_mean = mean(educ, na.rm = T),
+            educ_sd = sd(educ, na.rm = T)
+            )
+
+triage_data_clean %>% 
+  select("id","gender") %>% 
+  distinct() %>% 
+  group_by(gender) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  mutate(prop = n/sum(n))
+
+triage_data_clean %>% 
+  select("id","cntry_live") %>% 
+  distinct() %>% 
+  mutate(cntry_live = countrycode(cntry_live,
+                                  origin = "country.name.de",
+                                  destination = "country.name.en"
+                                  )
+         ) %>%
+  group_by(cntry_live) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  mutate(prop = n/sum(n)) %>% 
+  distinct() %>% 
+  print()
+```
+
+
+
