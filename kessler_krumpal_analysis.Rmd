@@ -69,16 +69,6 @@ loaded via a namespace (and not attached):
 # Read data
 
 ```{r}
- # dput(x = df_triage_final,
- #      file = "data/data_final.R")
- # 
- # triage_data <- dget(file = "data/data_final.R")
- # 
- # triage_data %>%
- #   select("id", contains("vig"), contains("proc"), "consent", "bot_all", "time", "age", "gender", "educ", "cntry_live") %>%
- #   dput(x = .,
- #        file = "data/data.R")
-
 triage_data <- dget(file = "data/data.R")
 ```
 
