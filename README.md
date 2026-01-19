@@ -2,7 +2,7 @@
 
 The repository contains data and analysis files for the following journal article:
 
-Keßler, P., & Krumpal, I. (2025). Fair allocation of resources in the moral dilemma of triage. Frontiers in Sociology, 10, 1570940. [https://doi.org/10.3389/fsoc.2025.1570940]
+Keßler, P., & Krumpal, I. (2025). Fair allocation of resources in the moral dilemma of triage. Frontiers in Sociology, 10, 1570940. https://doi.org/10.3389/fsoc.2025.1570940
 
 
 ## Abstract
